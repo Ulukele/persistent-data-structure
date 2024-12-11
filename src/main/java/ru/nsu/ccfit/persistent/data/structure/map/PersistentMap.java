@@ -6,22 +6,21 @@ import ru.nsu.ccfit.persistent.data.structure.node.ModificationBoxNode;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- *
  * Ассоциативный массив поддерживающий операции возврата к предыдущему состоянию.
  *
- * @param <K>
- *     Тип ключа ассоциативного массива.
- * @param <V>
- *     Тип значения ассоциативного массива.
+ * @param <K> Тип ключа ассоциативного массива.
+ * @param <V> Тип значения ассоциативного массива.
  */
 public class PersistentMap<K, V> implements Map<K, V>, PersistentStructure {
 
@@ -156,6 +155,7 @@ public class PersistentMap<K, V> implements Map<K, V>, PersistentStructure {
                     )
             );
             if (newNode == last) {
+                roots.put(currentVersion, roots.get(currentVersion - 1));
                 return last.getValue(currentVersion - 1).getValue();
             }
             path.remove(path.size() - 1);
@@ -180,51 +180,80 @@ public class PersistentMap<K, V> implements Map<K, V>, PersistentStructure {
         return null;
     }
 
-    private ModificationBoxNode<Entry<K, V>, Long> upperLink(
-            Long version,
-            List<ModificationBoxNode<Entry<K, V>, Long>> path,
-            List<Boolean> isLeftMove,
-            ModificationBoxNode<Entry<K, V>, Long> newNode) {
-        ModificationBoxNode<Entry<K, V>, Long> lastCreated = newNode;
-        for (int i = path.size() - 1; i >= 0; --i) {
-            var isLeft = isLeftMove.get(i);
-            var current = path.get(i);
-            var modification = current.getModificationBox();
-            if (modification == null) {
-                current.modify(
-                        isLeft
-                                ? ModificationBox.createLeftModification(version, lastCreated)
-                                : ModificationBox.createRightModification(version, lastCreated)
-                );
-                return null;
-            } else {
-                var rawNewNode = new ModificationBoxNode<>(
-                        current.getLeft(version),
-                        current.getRight(version),
-                        current.getValue(version)
-                ).modify(
-                        isLeft
-                                ? ModificationBox.createLeftModification(version, lastCreated)
-                                : ModificationBox.createRightModification(version, lastCreated)
-                );
-                lastCreated = new ModificationBoxNode<>(
-                        rawNewNode.getLeft(version),
-                        rawNewNode.getRight(version),
-                        rawNewNode.getValue(version)
-                );
-            }
-        }
-        return lastCreated;
-    }
-
     @Override
     public V remove(Object key) {
-        var entry = getEntry(key);
-        if (entry == null) {
+        var entryWithParent = getEntryWithParent(key);
+        if (entryWithParent == null || entryWithParent.isEmpty()) {
             return null;
         }
-        // not implemented
-        throw new IllegalStateException("not implemented");
+        doBeforeModifyAction();
+        var entry = entryWithParent.get(0);
+        var parent = entryWithParent.size() > 1
+                ? entryWithParent.get(1)
+                : null;
+        var left = entry.getLeft(currentVersion - 1);
+        var right = entry.getRight(currentVersion - 1);
+        if (left == null && right == null) {
+            var newRoot = removeLeaf(parent, entry);
+            roots.put(currentVersion, newRoot);
+        } else if (left == null) {
+            var newRoot = removeByReplace(parent, entry, entry.getRight(currentVersion - 1));
+            roots.put(currentVersion, newRoot);
+        } else if (right == null) {
+            var newRoot = removeByReplace(parent, entry, entry.getLeft(currentVersion - 1));
+            roots.put(currentVersion, newRoot);
+        } else {
+            // not implemented
+            throw new IllegalStateException("not implemented");
+        }
+        return entry.getValue(currentVersion - 1).getValue();
+    }
+
+    private ModificationBoxNode<Entry<K, V>, Long> removeLeaf(
+            ModificationBoxNode<Entry<K, V>, Long> parent,
+            ModificationBoxNode<Entry<K, V>, Long> entry) {
+        // leaf is root case
+        if (parent == null) {
+            return null; // null is new root -- no root
+        }
+        @SuppressWarnings("unchecked")
+        Comparable<? super K> ek = (Comparable<? super K>) entry.getValue(currentVersion - 1).getKey();
+        @SuppressWarnings("unchecked")
+        Comparable<? super K> pk = (Comparable<? super K>) parent.getValue(currentVersion - 1).getKey();
+        var isLeft = ek.compareTo(parent.getValue(currentVersion - 1).getKey()) < 0;
+        return modifyInSubtree(
+                currentVersion - 1,
+                currentVersion,
+                roots.get(currentVersion - 1),
+                pk::compareTo,
+                isLeft
+                        ? ModificationBox.createLeftModification(currentVersion, null)
+                        : ModificationBox.createRightModification(currentVersion, null)
+        );
+    }
+
+    private ModificationBoxNode<Entry<K, V>, Long> removeByReplace(
+            ModificationBoxNode<Entry<K, V>, Long> parent,
+            ModificationBoxNode<Entry<K, V>, Long> entry,
+            ModificationBoxNode<Entry<K, V>, Long> newEntry) {
+        // entry is root case
+        if (parent == null) {
+            return newEntry; // newEntry is new root
+        }
+        @SuppressWarnings("unchecked")
+        Comparable<? super K> ek = (Comparable<? super K>) entry.getValue(currentVersion - 1).getKey();
+        @SuppressWarnings("unchecked")
+        Comparable<? super K> pk = (Comparable<? super K>) parent.getValue(currentVersion - 1).getKey();
+        var isLeft = ek.compareTo(parent.getValue(currentVersion - 1).getKey()) < 0;
+        return modifyInSubtree(
+                currentVersion - 1,
+                currentVersion,
+                roots.get(currentVersion - 1),
+                pk::compareTo,
+                isLeft
+                        ? ModificationBox.createLeftModification(currentVersion, newEntry)
+                        : ModificationBox.createRightModification(currentVersion, newEntry)
+        );
     }
 
     @Override
@@ -266,6 +295,89 @@ public class PersistentMap<K, V> implements Map<K, V>, PersistentStructure {
         return result;
     }
 
+    private ModificationBoxNode<Entry<K, V>, Long> modifyInSubtree(
+            Long previousVersion,
+            Long version,
+            ModificationBoxNode<Entry<K, V>, Long> subRoot,
+            Function<K, Integer> moveFunction,
+            ModificationBox<Entry<K, V>, Long> modification) {
+        if (subRoot == null) {
+            return null;
+        }
+        // Search
+        var entry = subRoot;
+        ArrayList<ModificationBoxNode<Entry<K, V>, Long>> path = new ArrayList<>();
+        while (entry != null) {
+            path.add(entry);
+            var move = moveFunction.apply(entry.getValue(previousVersion).getKey());
+            if (move == 0) {
+                break;
+            } else if (move > 0) {
+                entry = entry.getRight(previousVersion);
+            } else {
+                entry = entry.getLeft(previousVersion);
+            }
+        }
+        // Copy until reach unmodified
+        var reversePath = path.reversed();
+        var pathIterator = reversePath.iterator();
+        // Node searched for modify
+        var target = pathIterator.next();
+        var lastCopy = target.modify(modification);
+        if (lastCopy == target) {
+            return null;
+        }
+        while (pathIterator.hasNext()) {
+            var copyCandidate = pathIterator.next();
+            lastCopy = copyCandidate.modify(
+                    moveFunction.apply(copyCandidate.getValue(previousVersion).getKey()) > 0
+                            ? ModificationBox.createRightModification(version, lastCopy)
+                            : ModificationBox.createLeftModification(version, lastCopy)
+            );
+            if (lastCopy == copyCandidate) {
+                return null;
+            }
+        }
+        return lastCopy;
+    }
+
+    private ModificationBoxNode<Entry<K, V>, Long> upperLink(
+            Long version,
+            List<ModificationBoxNode<Entry<K, V>, Long>> path,
+            List<Boolean> isLeftMove,
+            ModificationBoxNode<Entry<K, V>, Long> newNode) {
+        ModificationBoxNode<Entry<K, V>, Long> lastCreated = newNode;
+        for (int i = path.size() - 1; i >= 0; --i) {
+            var isLeft = isLeftMove.get(i);
+            var current = path.get(i);
+            var modification = current.getModificationBox();
+            if (modification == null) {
+                current.modify(
+                        isLeft
+                                ? ModificationBox.createLeftModification(version, lastCreated)
+                                : ModificationBox.createRightModification(version, lastCreated)
+                );
+                return null;
+            } else {
+                var rawNewNode = new ModificationBoxNode<>(
+                        current.getLeft(version),
+                        current.getRight(version),
+                        current.getValue(version)
+                ).modify(
+                        isLeft
+                                ? ModificationBox.createLeftModification(version, lastCreated)
+                                : ModificationBox.createRightModification(version, lastCreated)
+                );
+                lastCreated = new ModificationBoxNode<>(
+                        rawNewNode.getLeft(version),
+                        rawNewNode.getRight(version),
+                        rawNewNode.getValue(version)
+                );
+            }
+        }
+        return lastCreated;
+    }
+
     private Set<Entry<K, V>> getRootEntrySet(
             ModificationBoxNode<Map.Entry<K, V>, Long> root,
             Set<Entry<K, V>> internalEntrySet) {
@@ -279,10 +391,19 @@ public class PersistentMap<K, V> implements Map<K, V>, PersistentStructure {
     }
 
     private ModificationBoxNode<Map.Entry<K, V>, Long> getEntry(Object key) {
+        var entryWithParent = getEntryWithParent(key);
+        if (entryWithParent == null || entryWithParent.isEmpty()) {
+            return null;
+        }
+        return entryWithParent.get(0);
+    }
+
+    private List<ModificationBoxNode<Map.Entry<K, V>, Long>> getEntryWithParent(Object key) {
         Objects.requireNonNull(key);
         @SuppressWarnings("unchecked")
         Comparable<? super K> k = (Comparable<? super K>) key;
         var entry = getCurrentRoot();
+        ModificationBoxNode<Map.Entry<K, V>, Long> previous = null;
         while (entry != null) {
             var internalEntry = entry.getValue(currentVersion);
             if (internalEntry == null) {
@@ -291,8 +412,11 @@ public class PersistentMap<K, V> implements Map<K, V>, PersistentStructure {
             var entryKey = internalEntry.getKey();
             var compareResult = k.compareTo(entryKey);
             if (compareResult == 0) {
-                return entry;
+                return previous == null
+                        ? Collections.singletonList(entry)
+                        : List.of(entry, previous);
             }
+            previous = entry;
             if (compareResult > 0) {
                 entry = entry.getRight(currentVersion);
             } else {
@@ -309,6 +433,9 @@ public class PersistentMap<K, V> implements Map<K, V>, PersistentStructure {
     private void doBeforeModifyAction() {
         deleteMemoized();
         currentVersion++;
+        if (currentVersion != 1 && lastVersion >= currentVersion) {
+            roots.get(currentVersion - 1).cleanFromVersion(currentVersion);
+        }
         lastVersion = currentVersion;
         roots.remove(currentVersion);
     }

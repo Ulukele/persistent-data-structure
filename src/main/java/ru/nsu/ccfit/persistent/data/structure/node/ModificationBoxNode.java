@@ -117,7 +117,7 @@ public class ModificationBoxNode<T, V extends Comparable<V>> {
     /**
      * Возвращает обновленный узел.
      *
-     * @param modification обновление.
+     * @param modification Обновление.
      * @return Обновленный узел.
      */
     public ModificationBoxNode<T, V> modify(ModificationBox<T, V> modification) {
@@ -140,6 +140,23 @@ public class ModificationBoxNode<T, V extends Comparable<V>> {
                 modifiedCopy.getValue(version),
                 null
         );
+    }
+
+    /**
+     * Удаляет из узла информацию о всех модификациях совершенных в версиях выше указанной.
+     *
+     * @param version Версия.
+     */
+    public void cleanFromVersion(V version) {
+        if (modificationBox != null && modificationBox.getModificationVersion().compareTo(version) >= 0) {
+            modificationBox = null;
+        }
+        if (left != null) {
+            left.cleanFromVersion(version);
+        }
+        if (right != null) {
+            right.cleanFromVersion(version);
+        }
     }
 
 }
