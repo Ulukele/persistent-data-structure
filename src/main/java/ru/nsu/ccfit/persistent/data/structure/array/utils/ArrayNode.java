@@ -8,10 +8,12 @@ import java.util.List;
  * Узел B-дерева для персистентной коллекции
  */
 public class ArrayNode<E> {
+
     private List<ArrayNode<E>> child;
     private List<E> value;
 
-    public ArrayNode() {}
+    public ArrayNode() {
+    }
 
     public ArrayNode(ArrayNode<E> other) {
         if (other != null) {
@@ -106,38 +108,5 @@ public class ArrayNode<E> {
         String childNodes = child == null ? "[child null]" : Arrays.toString(child.toArray());
         String values = value == null ? "[value null]" : Arrays.toString(value.toArray());
         return String.format("%09x %s %s", hashCode(), childNodes, values);
-    }
-
-    private String drawTab(int count) {
-        StringBuilder s = new StringBuilder();
-        for (int i = 0; i < count; i++) {
-            s.append("  ");
-        }
-        return s.toString();
-    }
-
-    private String drawGraph(ArrayNode<E> node, int level) {
-        String hash = String.format("%09x", node.hashCode()) + " ";
-        StringBuilder result = new StringBuilder();
-        if (node.child == null) {
-            if (node.value == null) {
-                return drawTab(level) + hash + "\n";
-            } else {
-                return drawTab(level) + hash + node.value.toString() + "\n";
-            }
-        } else {
-            result.append(drawTab(level)).append(hash).append("\n");
-
-            for (ArrayNode<E> n : node.child) {
-                if (n != null) {
-                    result.append(drawGraph(n, level + 1));
-                }
-            }
-        }
-        return result.toString();
-    }
-
-    public String drawGraph() {
-        return drawGraph(this, 0);
     }
 }
