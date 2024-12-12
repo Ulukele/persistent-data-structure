@@ -46,6 +46,7 @@ public class PersistentArray<E> extends PersistentCollection implements List<E> 
         super(other.depth, other.bitPerEdge);
         this.undo.addAll(other.undo);
         this.redo.addAll(other.redo);
+        this.parent = other.parent;
     }
 
     @Override
@@ -72,45 +73,13 @@ public class PersistentArray<E> extends PersistentCollection implements List<E> 
         }
     }
 
-    private void tryParentUndo(E value) {
-        if (value instanceof PersistentArray) {
-            ((PersistentArray) value).parent = this;
-        }
-
-        if (parent != null) {
-            parent.insertedUndo.push(this);
-        }
-    }
-
     @Override
     public int size() {
         return size(getCurrentHead());
     }
 
-    private int size(ArrayHead<E> head) {
-        return head.getSize();
-    }
-
-    protected ArrayHead<E> getCurrentHead() {
-        return this.undo.peek();
-    }
-
-    private void checkIndex(int index) {
-        checkIndex(getCurrentHead(), index);
-    }
-
-    private void checkIndex(ArrayHead<E> head, int index) {
-        if ((index < 0) || (index >= head.getSize())) {
-            throw new IndexOutOfBoundsException("Invalid index");
-        }
-    }
-
     public boolean isFull() {
         return isFull(getCurrentHead());
-    }
-
-    private boolean isFull(ArrayHead<E> head) {
-        return head.getSize() >= maxSize;
     }
 
     @Override
@@ -185,6 +154,115 @@ public class PersistentArray<E> extends PersistentCollection implements List<E> 
         tryParentUndo(element);
     }
 
+    public E pop() {
+        if (isEmpty()) {
+            throw new NoSuchElementException("Array is empty");
+        }
+
+        ArrayHead<E> newHead = new ArrayHead<>(getCurrentHead(), -1);
+        undo.push(newHead);
+        redo.clear();
+        LinkedList<AbstractMap.SimpleEntry<ArrayNode<E>, Integer>> path = new LinkedList<>();
+        path.add(new AbstractMap.SimpleEntry<>(newHead.getRoot(), 0));
+        for (int level = bitPerEdge * (depth - 1); level > 0; level -= bitPerEdge) {
+            int index = (newHead.getSize() >> level) & mask;
+            ArrayNode<E> tmp;
+            ArrayNode<E> newNode;
+            tmp = path.getLast().getKey().getChild().get(index);
+            newNode = new ArrayNode<>(tmp);
+            path.getLast().getKey().getChild().set(index, newNode);
+            path.add(new AbstractMap.SimpleEntry<>(newNode, index));
+        }
+
+        int index = newHead.getSize() & mask;
+        E result = path.getLast().getKey().getValue().remove(index);
+
+        for (int i = path.size() - 1; i >= 1; i--) {
+            AbstractMap.SimpleEntry<ArrayNode<E>, Integer> elem = path.get(i);
+            if (elem.getKey().isEmpty()) {
+                path.get(i - 1).getKey().getChild().remove((int) elem.getValue());
+            } else {
+                break;
+            }
+        }
+
+        return result;
+    }
+
+    @Override
+    public E remove(int index) {
+        checkIndex(index);
+
+        E result = get(index);
+
+        ArrayHead<E> oldHead = getCurrentHead();
+        ArrayHead<E> newHead;
+
+        if (index == 0) {
+            newHead = new ArrayHead<>();
+            undo.push(newHead);
+            redo.clear();
+        } else {
+            AbstractMap.SimpleEntry<ArrayNode<E>, Integer> copedNodeP = copyLeafToMove(oldHead, index);
+            int leafIndex = copedNodeP.getValue();
+            ArrayNode<E> copedNode = copedNodeP.getKey();
+            copedNode.getValue().remove(leafIndex);
+
+            newHead = getCurrentHead();
+            newHead.setSize(newHead.getSize() - 1);
+        }
+
+        for (int i = index + 1; i < oldHead.getSize(); i++) {
+            add(newHead, get(oldHead, i));
+        }
+
+        return result;
+    }
+
+    @Override
+    public void clear() {
+        ArrayHead<E> head = new ArrayHead<>();
+        undo.push(head);
+        redo.clear();
+    }
+
+    @Override
+    public E get(int index) {
+        return get(getCurrentHead(), index);
+    }
+
+    protected ArrayHead<E> getCurrentHead() {
+        return this.undo.peek();
+    }
+
+    private void tryParentUndo(E value) {
+        if (value instanceof PersistentArray) {
+            ((PersistentArray) value).parent = this;
+        }
+
+        if (parent != null) {
+            parent.insertedUndo.push(this);
+        }
+    }
+
+    private int size(ArrayHead<E> head) {
+        return head.getSize();
+    }
+
+    private void checkIndex(int index) {
+        checkIndex(getCurrentHead(), index);
+    }
+
+    private void checkIndex(ArrayHead<E> head, int index) {
+        if ((index < 0) || (index >= head.getSize())) {
+            throw new IndexOutOfBoundsException("Invalid index");
+        }
+    }
+
+    private boolean isFull(ArrayHead<E> head) {
+        return head.getSize() >= maxSize;
+    }
+
     private boolean add(ArrayHead<E> head, E newElement) {
         add(head).getValue().add(newElement);
 
@@ -226,96 +304,18 @@ public class PersistentArray<E> extends PersistentCollection implements List<E> 
         return currentNode;
     }
 
-    /**
-     * Удаляет последний элемент массива.
-     *
-     * @return последний элемент массива
-     */
-    public E pop() {
-        if (isEmpty()) {
-            throw new NoSuchElementException("Array is empty");
-        }
-
-        ArrayHead<E> newHead = new ArrayHead<>(getCurrentHead(), -1);
-        undo.push(newHead);
-        redo.clear();
-        LinkedList<AbstractMap.SimpleEntry<ArrayNode<E>, Integer>> path = new LinkedList<>();
-        path.add(new AbstractMap.SimpleEntry<>(newHead.getRoot(), 0));
-        for (int level = bitPerEdge * (depth - 1); level > 0; level -= bitPerEdge) {
-            int index = (newHead.getSize() >> level) & mask;
-            ArrayNode<E> tmp;
-            ArrayNode<E> newNode;
-            tmp = path.getLast().getKey().getChild().get(index);
-            newNode = new ArrayNode<>(tmp);
-            path.getLast().getKey().getChild().set(index, newNode);
-            path.add(new AbstractMap.SimpleEntry<>(newNode, index));
-        }
-
-        int index = newHead.getSize() & mask;
-        E result = path.getLast().getKey().getValue().remove(index);
-
-        for (int i = path.size() - 1; i >= 1; i--) {
-            AbstractMap.SimpleEntry<ArrayNode<E>, Integer> elem = path.get(i);
-            if (elem.getKey().isEmpty()) {
-                path.get(i - 1).getKey().getChild().remove((int) elem.getValue());
-            } else {
-                break;
-            }
-        }
-
-        return result;
+    @Override
+    public String toString() {
+        return toString(getCurrentHead());
     }
 
-    /**
-     * Удаляет элемент по указанному индексу.
-     * <p>
-     * Удаляет элемент в указанной позиции в этом массиве. Сдвигает любые
-     * последующие элементы влево (вычитает единицу из их индексов). Возвращает
-     * элемент, который был удален из массива.
-     * </p>
-     *
-     * @param index индекс удаляемого элемента
-     * @return удаленный элемент
-     */
     @Override
-    public E remove(int index) {
-        checkIndex(index);
-
-        E result = get(index);
-
-        ArrayHead<E> oldHead = getCurrentHead();
-        ArrayHead<E> newHead;
-
-        if (index == 0) {
-            newHead = new ArrayHead<>();
-            undo.push(newHead);
-            redo.clear();
-        } else {
-            AbstractMap.SimpleEntry<ArrayNode<E>, Integer> copedNodeP = copyLeafToMove(oldHead, index);
-            int leafIndex = copedNodeP.getValue();
-            ArrayNode<E> copedNode = copedNodeP.getKey();
-            copedNode.getValue().remove(leafIndex);
-
-            newHead = getCurrentHead();
-            newHead.setSize(newHead.getSize() - 1);
-        }
-
-        for (int i = index + 1; i < oldHead.getSize(); i++) {
-            add(newHead, get(oldHead, i));
-        }
-
-        return result;
+    public Object[] toArray() {
+        return toArray(getCurrentHead());
     }
 
-    /**
-     * Удаляет все элементы из этого массива. Массив будет пуст после возврата
-     * этого вызова.
-     */
-    @Override
-    public void clear() {
-        ArrayHead<E> head = new ArrayHead<>();
-        undo.push(head);
-        redo.clear();
+    private String toString(ArrayHead<E> head) {
+        return Arrays.toString(toArray(head));
     }
 
     private AbstractMap.SimpleEntry<ArrayNode<E>, Integer> copyLeafToChange(ArrayHead<E> head, int index) {
@@ -357,17 +357,6 @@ public class PersistentArray<E> extends PersistentCollection implements List<E> 
         return new AbstractMap.SimpleEntry<>(currentNode, index & mask);
     }
 
-    /**
-     * Возвращает элемент в указанной позиции в массиве.
-     *
-     * @param index индекс возвращаемого элемента
-     * @return элемент в указанной позиции в массиве
-     */
-    @Override
-    public E get(int index) {
-        return get(getCurrentHead(), index);
-    }
-
     private E get(ArrayHead<E> head, int index) {
         checkIndex(head, index);
         return getLeaf(head, index).getValue().get(index & mask);
@@ -385,40 +374,6 @@ public class PersistentArray<E> extends PersistentCollection implements List<E> 
         return node;
     }
 
-    public String drawGraph() {
-        return getCurrentHead().getRoot().drawGraph();
-    }
-
-    /**
-     * Возвращает строковое представление содержимого массива.
-     * <p>
-     * Строковое представление состоит из списка элементов этого персистентного
-     * массива, заключенного в квадратные скобки («[]»). Смежные элементы
-     * разделяются символами «, » (запятая с последующим пробелом).
-     *
-     * @return строковое представление массива
-     */
-    @Override
-    public String toString() {
-        return toString(getCurrentHead());
-    }
-
-    private String toString(ArrayHead<E> head) {
-        return Arrays.toString(toArray(head));
-    }
-
-    /**
-     * Возвращает массив, содержащий все элементы этого персистентного массива в
-     * правильной последовательности (от первого до последнего элемента).
-     *
-     * @return массив, содержащий все элементы этого персистентного массива в
-     * правильной последовательности
-     */
-    @Override
-    public Object[] toArray() {
-        return toArray(getCurrentHead());
-    }
-
     private Object[] toArray(ArrayHead<E> head) {
         Object[] objects = new Object[head.getSize()];
         for (int i = 0; i < objects.length; i++) {
@@ -429,67 +384,67 @@ public class PersistentArray<E> extends PersistentCollection implements List<E> 
 
     @Override
     public <T> T[] toArray(T[] a) {
-        return null;
+        throw new IllegalStateException("Not implemented");
     }
 
     @Override
     public boolean contains(Object o) {
-        return false;
+        throw new IllegalStateException("Not implemented");
     }
 
     @Override
     public boolean containsAll(Collection<?> c) {
-        return false;
+        throw new IllegalStateException("Not implemented");
     }
 
     @Override
     public boolean addAll(Collection<? extends E> c) {
-        return false;
+        throw new IllegalStateException("Not implemented");
     }
 
     @Override
     public boolean addAll(int index, Collection<? extends E> c) {
-        return false;
+        throw new IllegalStateException("Not implemented");
     }
 
     @Override
     public boolean remove(Object o) {
-        return false;
+        throw new IllegalStateException("Not implemented");
     }
 
     @Override
     public boolean removeAll(Collection<?> c) {
-        return false;
+        throw new IllegalStateException("Not implemented");
     }
 
     @Override
     public boolean retainAll(Collection<?> c) {
-        return false;
+        throw new IllegalStateException("Not implemented");
     }
 
     @Override
     public int indexOf(Object o) {
-        return 0;
+        throw new IllegalStateException("Not implemented");
     }
 
     @Override
     public int lastIndexOf(Object o) {
-        return 0;
+        throw new IllegalStateException("Not implemented");
     }
 
     @Override
     public ListIterator<E> listIterator() {
-        return null;
+        throw new IllegalStateException("Not implemented");
     }
 
     @Override
     public ListIterator<E> listIterator(int index) {
-        return null;
+        throw new IllegalStateException("Not implemented");
     }
 
     @Override
     public List<E> subList(int fromIndex, int toIndex) {
-        return null;
+        throw new IllegalStateException("Not implemented");
     }
 
     @Override
@@ -504,21 +459,11 @@ public class PersistentArray<E> extends PersistentCollection implements List<E> 
 
         int index = 0;
 
-        /**
-         * Возвращает true, если итерация содержит больше элементов.
-         *
-         * @return true, если итерация имеет больше элементов.
-         */
         @Override
         public boolean hasNext() {
             return index < size();
         }
 
-        /**
-         * Возвращает следующий элемент в итерации.
-         *
-         * @return следующий элемент в итерации.
-         */
         @Override
         public T next() {
             return (T) get(index++);
@@ -526,6 +471,7 @@ public class PersistentArray<E> extends PersistentCollection implements List<E> 
 
         @Override
         public void remove() {
+            throw new IllegalStateException("Not implemented");
         }
     }
 }
