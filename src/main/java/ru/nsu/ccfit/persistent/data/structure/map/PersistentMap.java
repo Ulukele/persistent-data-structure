@@ -193,19 +193,17 @@ public class PersistentMap<K, V> implements Map<K, V>, PersistentStructure {
                 : null;
         var left = entry.getLeft(currentVersion - 1);
         var right = entry.getRight(currentVersion - 1);
+        final ModificationBoxNode<Map.Entry<K, V>, Long> newRoot;
         if (left == null && right == null) {
-            var newRoot = removeLeaf(parent, entry);
-            roots.put(currentVersion, newRoot);
+            newRoot = removeLeaf(parent, entry);
         } else if (left == null) {
-            var newRoot = removeByReplace(parent, entry, entry.getRight(currentVersion - 1));
-            roots.put(currentVersion, newRoot);
+            newRoot = removeByReplace(parent, entry, entry.getRight(currentVersion - 1));
         } else if (right == null) {
-            var newRoot = removeByReplace(parent, entry, entry.getLeft(currentVersion - 1));
-            roots.put(currentVersion, newRoot);
+            newRoot = removeByReplace(parent, entry, entry.getLeft(currentVersion - 1));
         } else {
-            // not implemented
-            throw new IllegalStateException("not implemented");
+            newRoot = removeFullNode(parent, entry);
         }
+        roots.put(currentVersion, newRoot);
         return entry.getValue(currentVersion - 1).getValue();
     }
 
@@ -222,7 +220,6 @@ public class PersistentMap<K, V> implements Map<K, V>, PersistentStructure {
         Comparable<? super K> pk = (Comparable<? super K>) parent.getValue(currentVersion - 1).getKey();
         var isLeft = ek.compareTo(parent.getValue(currentVersion - 1).getKey()) < 0;
         return modifyInSubtree(
-                currentVersion - 1,
                 currentVersion,
                 roots.get(currentVersion - 1),
                 pk::compareTo,
@@ -246,13 +243,50 @@ public class PersistentMap<K, V> implements Map<K, V>, PersistentStructure {
         Comparable<? super K> pk = (Comparable<? super K>) parent.getValue(currentVersion - 1).getKey();
         var isLeft = ek.compareTo(parent.getValue(currentVersion - 1).getKey()) < 0;
         return modifyInSubtree(
-                currentVersion - 1,
                 currentVersion,
                 roots.get(currentVersion - 1),
                 pk::compareTo,
                 isLeft
                         ? ModificationBox.createLeftModification(currentVersion, newEntry)
                         : ModificationBox.createRightModification(currentVersion, newEntry)
+        );
+    }
+
+    private ModificationBoxNode<Entry<K, V>, Long> removeFullNode(
+            ModificationBoxNode<Entry<K, V>, Long> parent,
+            ModificationBoxNode<Entry<K, V>, Long> toRemove) {
+        var entry = toRemove.getLeft(currentVersion);
+        ModificationBoxNode<Map.Entry<K, V>, Long> valueToCopyParent = null;
+        Map.Entry<K, V> valueToCopy = entry.getValue(currentVersion);
+        while (entry != null) {
+            if (entry.getRight(currentVersion) != null) {
+                valueToCopyParent = entry;
+            }
+            valueToCopy = entry.getValue(currentVersion);
+            entry = entry.getRight(currentVersion);
+        }
+        final ModificationBoxNode<Entry<K, V>, Long> leftSubtree;
+        if (valueToCopyParent == null) {
+            leftSubtree = null;
+        } else {
+            @SuppressWarnings("unchecked")
+            Comparable<? super K> pk = (Comparable<? super K>) valueToCopyParent.getValue(currentVersion - 1).getKey();
+            leftSubtree = modifyInSubtree(
+                    currentVersion,
+                    toRemove.getLeft(currentVersion),
+                    pk::compareTo,
+                    ModificationBox.createRightModification(currentVersion, null)
+            );
+        }
+        var replaceNode = new ModificationBoxNode<>(
+                leftSubtree,
+                toRemove.getRight(currentVersion),
+                valueToCopy
+        );
+        return removeByReplace(
+                parent,
+                toRemove,
+                replaceNode
         );
     }
 
@@ -296,7 +330,6 @@ public class PersistentMap<K, V> implements Map<K, V>, PersistentStructure {
     }
 
     private ModificationBoxNode<Entry<K, V>, Long> modifyInSubtree(
-            Long previousVersion,
             Long version,
             ModificationBoxNode<Entry<K, V>, Long> subRoot,
             Function<K, Integer> moveFunction,
@@ -309,13 +342,13 @@ public class PersistentMap<K, V> implements Map<K, V>, PersistentStructure {
         ArrayList<ModificationBoxNode<Entry<K, V>, Long>> path = new ArrayList<>();
         while (entry != null) {
             path.add(entry);
-            var move = moveFunction.apply(entry.getValue(previousVersion).getKey());
+            var move = moveFunction.apply(entry.getValue(version).getKey());
             if (move == 0) {
                 break;
             } else if (move > 0) {
-                entry = entry.getRight(previousVersion);
+                entry = entry.getRight(version);
             } else {
-                entry = entry.getLeft(previousVersion);
+                entry = entry.getLeft(version);
             }
         }
         // Copy until reach unmodified
@@ -330,7 +363,7 @@ public class PersistentMap<K, V> implements Map<K, V>, PersistentStructure {
         while (pathIterator.hasNext()) {
             var copyCandidate = pathIterator.next();
             lastCopy = copyCandidate.modify(
-                    moveFunction.apply(copyCandidate.getValue(previousVersion).getKey()) > 0
+                    moveFunction.apply(copyCandidate.getValue(version).getKey()) > 0
                             ? ModificationBox.createRightModification(version, lastCopy)
                             : ModificationBox.createLeftModification(version, lastCopy)
             );

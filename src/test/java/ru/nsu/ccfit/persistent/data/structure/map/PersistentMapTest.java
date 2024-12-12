@@ -12,7 +12,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 class PersistentMapTest {
@@ -50,6 +49,12 @@ class PersistentMapTest {
                     m.put("b", 2);
                     m.put("c", 3);
                     m.remove("a");
+                },
+                (m) -> {
+                    m.put("b", 2);
+                    m.put("a", 1);
+                    m.put("c", 3);
+                    m.remove("b");
                 }
         );
     }
