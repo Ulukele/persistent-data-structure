@@ -16,8 +16,7 @@ import ru.nsu.ccfit.persistent.data.structure.array.utils.ArrayNode;
 import ru.nsu.ccfit.persistent.data.structure.array.utils.PersistentCollection;
 
 /**
- * Персистентный массив поддерживающий операции возврата к предыдущему
- * состоянию.
+ * Массив поддерживающий операции возврата к предыдущему состоянию.
  */
 public class PersistentArray<E> extends PersistentCollection implements List<E> {
 

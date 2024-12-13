@@ -3,8 +3,7 @@ package ru.nsu.ccfit.persistent.data.structure.array.utils;
 import ru.nsu.ccfit.persistent.data.structure.PersistentStructure;
 
 /**
- * Описывает класс абстрактной персистентной коллекции с поддержкой возврата к
- * предыдущему состоянию.
+ * Базовый класс коллекции с поддержкой возврата к предыдущему состоянию.
  */
 public abstract class PersistentCollection implements PersistentStructure {
 
