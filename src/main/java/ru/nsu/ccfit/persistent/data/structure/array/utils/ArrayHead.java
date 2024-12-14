@@ -1,7 +1,15 @@
 package ru.nsu.ccfit.persistent.data.structure.array.utils;
 
 public class ArrayHead<E> {
+
+    /**
+     * Корневой узел массива
+     */
     private final ArrayNode<E> root;
+
+    /**
+     * Текущий размер массива
+     */
     private int size = 0;
 
     public ArrayHead() {

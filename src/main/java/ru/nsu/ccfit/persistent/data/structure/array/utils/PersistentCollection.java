@@ -7,10 +7,30 @@ import ru.nsu.ccfit.persistent.data.structure.PersistentStructure;
  */
 public abstract class PersistentCollection implements PersistentStructure {
 
+    /**
+     * Глубина структуры данных.
+     */
     public final int depth;
+
+    /**
+     * Маска, используемая для вычисления индексов в узлах.
+     */
     public final int mask;
+
+    /**
+     * Максимальный размер коллекции.
+     */
     public final int maxSize;
+
+    /**
+     * Количество бит, используемых для представления каждого уровня в структуре
+     * данных.
+     */
     public final int bitPerEdge;
+
+    /**
+     * Ширина структуры данных, равна 2^bitPerEdge
+     */
     public final int width;
 
     protected PersistentCollection(int depth, int bitPerEdge) {
