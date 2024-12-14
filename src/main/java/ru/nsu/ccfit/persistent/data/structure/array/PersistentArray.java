@@ -20,10 +20,35 @@ import ru.nsu.ccfit.persistent.data.structure.array.utils.PersistentCollection;
  */
 public class PersistentArray<E> extends PersistentCollection implements List<E> {
 
+    /**
+     * Ссылка на родительский массив, если текущий массив был создан в
+     * результате изменения родительского массива
+     */
     private PersistentArray<PersistentArray<?>> parent;
+
+    /**
+     * Стек для хранения массивов, которые были добавлены в текущий массив. Этот
+     * стек используется для реализации операции undo, чтобы можно было отменить
+     * добавление элементов
+     */
     private final Stack<PersistentArray<?>> insertedUndo = new Stack<>();
+
+    /**
+     * Стек для хранения массивов, которые были удалены из стека insertedUndo.
+     * Этот стек используется для реализации операции redo, чтобы можно было
+     * повторно добавить элементы, которые были отменены.
+     */
     private final Stack<PersistentArray<?>> insertedRedo = new Stack<>();
+
+    /**
+     * Стек для хранения состояний массива, которые могут быть повторно
+     * применены
+     */
     protected final Stack<ArrayHead<E>> redo = new Stack<>();
+
+    /**
+     * Стек для хранения состояний массива, которые могут быть отменены
+     */
     protected final Stack<ArrayHead<E>> undo = new Stack<>();
 
     public PersistentArray() {

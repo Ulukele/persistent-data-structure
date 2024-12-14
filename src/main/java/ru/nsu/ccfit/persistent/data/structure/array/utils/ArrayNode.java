@@ -9,7 +9,15 @@ import java.util.List;
  */
 public class ArrayNode<E> {
 
+    /**
+     * Массив дочерних узлов, который хранит ссылки на дочерние узлы текущего
+     * узла.
+     */
     private List<ArrayNode<E>> child;
+
+    /**
+     * Значения элементов узла
+     */
     private List<E> value;
 
     public ArrayNode() {
