@@ -50,7 +50,7 @@ public interface PersistentStructure {
 
 Алгоритм основан на узле, содержащем ссылку на левый узел, правый узел, значение в узле, а так же информацию о модификации левого узла, правого узла, или значения, а так же версию начиная с которой это изменение было применено.
 ![plot](img/pic1.png)
-Для реализации структур данных на основе такого подхода, была реализована вспомогательная структура [ModificationBoxNode<T, V extends Comparable<V>>](src/main/java/ru/nsu/ccfit/persistent/data/structure/node/ModificationBoxNode.java)
+Для реализации структур данных на основе такого подхода, была реализована вспомогательная структура [ModificationBoxNode<T, V extends Comparable<V>>](persistent-data-structure-lib/src/main/java/ru/nsu/ccfit/persistent/data/structure/node/ModificationBoxNode.java)
 ```java
 /**
  * Обновляемый узел.
@@ -114,13 +114,13 @@ public class ModificationBoxNode<T, V extends Comparable<V>> {
 - Ассоциативный массив
 
 ### Массив
-[PersistentArray\<E>](src/main/java/ru/nsu/ccfit/persistent/data/structure/array/PersistentArray.java) реализует естественный для Java интерфейс List<E>
-и основывается на структуре [ArrayHead\<E>](src/main/java/ru/nsu/ccfit/persistent/data/structure/array/utils/ArrayHead.java)
+[PersistentArray\<E>](persistent-data-structure-lib/src/main/java/ru/nsu/ccfit/persistent/data/structure/array/PersistentArray.java) реализует естественный для Java интерфейс List<E>
+и основывается на структуре [ArrayHead\<E>](persistent-data-structure-lib/src/main/java/ru/nsu/ccfit/persistent/data/structure/array/utils/ArrayHead.java)
 
 ### Двусвязный список
-[PersistentDoubleLinkedList\<V>](src/main/java/ru/nsu/ccfit/persistent/data/structure/list/PersistentDoubleLinkedList.java) реализует естественный для Java интерфейс List<V>
-и основывается на структуре [ModificationBoxNode<V, Long>](src/main/java/ru/nsu/ccfit/persistent/data/structure/node/ModificationBoxNode.java)
+[PersistentDoubleLinkedList\<V>](persistent-data-structure-lib/src/main/java/ru/nsu/ccfit/persistent/data/structure/list/PersistentDoubleLinkedList.java) реализует естественный для Java интерфейс List<V>
+и основывается на структуре [ModificationBoxNode<V, Long>](persistent-data-structure-lib/src/main/java/ru/nsu/ccfit/persistent/data/structure/node/ModificationBoxNode.java)
 
 ### Ассоциативный массив
-[PersistentMap<K, V>](src/main/java/ru/nsu/ccfit/persistent/data/structure/map/PersistentMap.java) реализует естественный для Java интерфейс Map<K, V>
-и основывается на структуре [ModificationBoxNode<Map.Entry<K, V>, Long>](src/main/java/ru/nsu/ccfit/persistent/data/structure/node/ModificationBoxNode.java)
+[PersistentMap<K, V>](persistent-data-structure-lib/src/main/java/ru/nsu/ccfit/persistent/data/structure/map/PersistentMap.java) реализует естественный для Java интерфейс Map<K, V>
+и основывается на структуре [ModificationBoxNode<Map.Entry<K, V>, Long>](persistent-data-structure-lib/src/main/java/ru/nsu/ccfit/persistent/data/structure/node/ModificationBoxNode.java)
